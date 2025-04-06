@@ -21,8 +21,10 @@ use session::{SessionState, is_valid_youtube_url};
 enum Command {
     #[command(description = "Display this help message")]
     Help,
-    #[command(description = "Start a new karaoke session")]
+    #[command(description = "Display help information")]
     Start,
+    #[command(description = "Start a new karaoke session")]
+    StartSession,
     #[command(description = "Join an existing session with code")]
     Join(String),
     #[command(description = "Add a YouTube link to the queue (with optional note)")]
@@ -80,10 +82,10 @@ async fn handle_command(
 ) -> ResponseResult<()> {
     if let Some(user_id) = msg.from().map(|user| user.id) {
         match cmd {
-            Command::Help => {
+            Command::Help | Command::Start => {
                 bot.send_message(msg.chat.id, Command::descriptions().to_string()).await?;
             }
-            Command::Start => {
+            Command::StartSession => {
                 let mut state_guard = state.lock().await;
                 let session_code = state_guard.create_session(user_id);
                 
@@ -163,7 +165,7 @@ async fn handle_command(
                 } else {
                     bot.send_message(
                         msg.chat.id,
-                        "You're not in a session. Join one with /join [code] or start your own with /start"
+                        "You're not in a session. Join one with /join [code] or start your own with /start-session"
                     ).await?;
                 }
             }
@@ -201,7 +203,7 @@ async fn handle_command(
                 } else {
                     bot.send_message(
                         msg.chat.id,
-                        "You're not in a session. Join one with /join [code] or start your own with /start"
+                        "You're not in a session. Join one with /join [code] or start your own with /start-session"
                     ).await?;
                 }
             }
@@ -240,7 +242,7 @@ async fn handle_youtube_message(
         if !state_guard.is_in_session(&user_id) {
             bot.send_message(
                 msg.chat.id,
-                "You're not in a session. Join one with /join [code] or start your own with /start"
+                "You're not in a session. Join one with /join [code] or start your own with /start-session"
             ).await?;
             return Ok(());
         }
