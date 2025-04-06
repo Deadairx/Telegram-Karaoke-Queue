@@ -40,7 +40,8 @@ cargo run
 ## Bot Commands
 
 - `/help`: Display help information
-- `/start`: Create a new karaoke session
+- `/start`: Display help information
+- `/start-session`: Create a new karaoke session
 - `/join [code]`: Join an existing session with a code
 - `/add [youtube_url]`: Add a YouTube link to the queue
 - `/queue`: View current queue
