@@ -48,10 +48,14 @@ cargo run
 
 ## Future Enhancements
 
+- [x] a message containing a youtube link should automatically be added to the queue
+- [ ] `/current` to display the video playing now
+- [ ] `/backlog` or `/history` to see all videos previously played
 - [ ] Persistent storage for sessions and queue items
 - [ ] Casting functionality to a Chromecast/TV
 - [ ] Prioritize queue so users who haven't gone in a while get queued up sooner
 - [ ] Admin controls for managing sessions
+- [ ] `/pop` to diplay next link and queue and remove it from the queue
 - [ ] Display video thumbnails and titles in queue
 - [ ] Support for other video platforms
 

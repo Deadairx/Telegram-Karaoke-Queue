@@ -25,6 +25,7 @@ pub struct QueueItem {
     pub added_by: UserId,
     pub added_at: i64,
     pub played: bool,
+    pub note: Option<String>, // Optional note for the queue item
 }
 
 impl SessionState {
@@ -60,7 +61,7 @@ impl SessionState {
         }
     }
 
-    pub fn add_to_queue(&mut self, user_id: UserId, url: String) -> Result<bool> {
+    pub fn add_to_queue(&mut self, user_id: UserId, url: String, note: Option<String>) -> Result<bool> {
         let session_code = self.user_sessions.get(&user_id)
             .ok_or_else(|| anyhow::anyhow!("User not in a session"))?;
         
@@ -82,6 +83,7 @@ impl SessionState {
             added_by: user_id,
             added_at: chrono::Utc::now().timestamp(),
             played: false,
+            note,
         };
         
         session.queue.push(queue_item);
