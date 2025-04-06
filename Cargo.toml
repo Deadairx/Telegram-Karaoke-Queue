@@ -1,0 +1,17 @@
+[package]
+name = "karaoke-queue"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+teloxide = { version = "0.12", features = ["macros"] }
+tokio = { version = "1.28", features = ["rt-multi-thread", "macros"] }
+log = "0.4"
+pretty_env_logger = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+dotenv = "0.15"
+anyhow = "1.0"
+rand = "0.8"
+chrono = "0.4"
+regex = "1.7"
+lazy_static = "1.4"
