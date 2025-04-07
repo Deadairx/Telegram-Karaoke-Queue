@@ -8,7 +8,6 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 - Add YouTube videos to a shared queue
 - View the current queue
 - Automatic validation of YouTube links
-- Duplicate link detection
 - Cast videos to a Chromecast/TV (simulated)
 - Track currently playing video and history
 - Session persistence across bot restarts (coming soon)

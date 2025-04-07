@@ -110,11 +110,3 @@ async fn fetch_video_title(video_id: &str) -> Result<Option<String>> {
 pub fn get_embed_url(video_id: &str) -> String {
     format!("https://www.youtube.com/embed/{}", video_id)
 }
-
-// Simple check if it's a duplicate URL by comparing video IDs
-pub fn is_duplicate(url1: &str, url2: &str) -> bool {
-    match (extract_video_id(url1), extract_video_id(url2)) {
-        (Some(id1), Some(id2)) => id1 == id2,
-        _ => false,
-    }
-}

@@ -163,9 +163,11 @@ async fn handle_command(
                                 .await?;
                             }
                             Ok(false) => {
+                                // This case won't happen anymore since we removed duplicate check
+                                // but leaving the pattern match for future flexibility
                                 bot.send_message(
                                     msg.chat.id,
-                                    "This video is already in the queue.",
+                                    "Added to queue! Type /queue to see current lineup.",
                                 )
                                 .await?;
                             }
@@ -456,8 +458,13 @@ async fn handle_youtube_message(bot: Bot, msg: Message, state: SharedState) -> R
                         .await?;
                     }
                     Ok(false) => {
-                        bot.send_message(msg.chat.id, "This video is already in the queue.")
-                            .await?;
+                        // This case won't happen anymore since we removed duplicate check
+                        // but leaving the pattern match for future flexibility
+                        bot.send_message(
+                            msg.chat.id, 
+                            "Added to queue! Type /queue to see current lineup.",
+                        )
+                        .await?;
                     }
                     Err(e) => {
                         error!("Error adding to queue: {}", e);

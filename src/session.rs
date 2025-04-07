@@ -4,7 +4,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use teloxide::types::UserId;
 
-use crate::youtube::{create_video_info, is_duplicate, validate_youtube_url, VideoInfo};
+use crate::youtube::{create_video_info, validate_youtube_url, VideoInfo};
 use crate::cast::CastStatus;
 
 #[derive(Clone, Default)]
@@ -84,16 +84,7 @@ impl SessionState {
             .get_mut(session_code)
             .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
 
-        // Check for duplicates
-        let is_dup = session
-            .queue
-            .iter()
-            .any(|item| is_duplicate(&item.video_info.url, &url));
-
-        if is_dup {
-            return Ok(false); // Don't add duplicates
-        }
-
+        // Remove duplicate check
         let video_info = create_video_info(&url).await?;
 
         let queue_item = QueueItem {
