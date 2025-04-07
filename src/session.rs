@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use teloxide::types::UserId;
 
 use crate::youtube::{create_video_info, is_duplicate, validate_youtube_url, VideoInfo};
+use crate::cast::CastStatus;
 
 #[derive(Clone, Default)]
 pub struct SessionState {
@@ -17,6 +18,8 @@ pub struct Session {
     pub code: String,
     pub users: Vec<UserId>,
     pub queue: Vec<QueueItem>,
+    pub owner: UserId,           // Track who created the session
+    pub cast_status: CastStatus, // Track current casting status
 }
 
 #[derive(Clone)]
@@ -41,6 +44,8 @@ impl SessionState {
             code: session_code.clone(),
             users: vec![user_id],
             queue: Vec::new(),
+            owner: user_id,
+            cast_status: CastStatus::default(),
         };
 
         self.sessions.insert(session_code.clone(), new_session);
@@ -132,6 +137,61 @@ impl SessionState {
 
     pub fn is_in_session(&self, user_id: &UserId) -> bool {
         self.user_sessions.contains_key(user_id)
+    }
+
+    // Check if user is the session owner
+    pub fn is_session_owner(&self, user_id: &UserId) -> bool {
+        if let Some(session_code) = self.user_sessions.get(user_id) {
+            if let Some(session) = self.sessions.get(session_code) {
+                return session.owner == *user_id;
+            }
+        }
+        false
+    }
+    
+    // Get the next item in the queue and mark it as current
+    pub fn next_in_queue(&mut self, user_id: &UserId) -> Option<QueueItem> {
+        // Only allow session owner to advance the queue
+        if !self.is_session_owner(user_id) {
+            return None;
+        }
+        
+        let session_code = self.user_sessions.get(user_id)?;
+        let session = self.sessions.get_mut(session_code)?;
+        
+        // Find the first unplayed item
+        let next_item_index = session.queue.iter().position(|item| !item.played);
+        
+        if let Some(index) = next_item_index {
+            // Mark item as played
+            session.queue[index].played = true;
+            
+            // Set current video in cast status
+            session.cast_status.current_video = Some(session.queue[index].video_info.clone());
+            
+            // Return a clone of the item
+            return Some(session.queue[index].clone());
+        }
+        
+        None
+    }
+    
+    // Get the current playing video
+    pub fn get_current_video(&self, user_id: &UserId) -> Option<&VideoInfo> {
+        let session_code = self.user_sessions.get(user_id)?;
+        let session = self.sessions.get(session_code)?;
+        
+        session.cast_status.current_video.as_ref()
+    }
+    
+    // Get history of played videos
+    pub fn get_history(&self, user_id: &UserId) -> Option<Vec<&QueueItem>> {
+        let session_code = self.user_sessions.get(user_id)?;
+        let session = self.sessions.get(session_code)?;
+        
+        let items = session.queue.iter().filter(|item| item.played).collect();
+        
+        Some(items)
     }
 }
 

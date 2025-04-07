@@ -9,8 +9,9 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 - View the current queue
 - Automatic validation of YouTube links
 - Duplicate link detection
+- Cast videos to a Chromecast/TV (simulated)
+- Track currently playing video and history
 - Session persistence across bot restarts (coming soon)
-- Cast functionality to play videos (coming soon)
 - Queue prioritization for users who haven't gone in a while (coming soon)
 
 ## Getting Started
@@ -56,18 +57,32 @@ cargo run
 - `/add [youtube_url]`: Add a YouTube link to the queue
 - `/queue`: View current queue
 - `/leave`: Leave current session
+- `/next`: Play the next video in the queue (session owner only)
+- `/current`: Display the video playing now
+- `/history`: View all videos previously played
+
+## Casting Functionality
+
+The bot includes a simulated casting functionality. When the session owner uses the `/next` command, the bot:
+
+1. Pops the next video from the queue
+2. Updates the current playing video
+3. Simulates casting to a device (currently a placeholder for real implementation)
+4. Tracks the video in history
+
+In a real implementation, this would connect to a Chromecast or other casting device to actually play the video.
 
 ## Future Enhancements
 
 - [x] a message containing a youtube link should automatically be added to the queue
 - [x] Display video titles and usernames in queue
-- [ ] `/current` to display the video playing now
-- [ ] `/backlog` or `/history` to see all videos previously played
+- [x] Casting functionality to a Chromecast/TV (simulated)
+- [x] `/current` to display the video playing now
+- [x] `/history` to see all videos previously played
+- [ ] Implement actual connection to Chromecast devices
 - [ ] Persistent storage for sessions and queue items
-- [ ] Casting functionality to a Chromecast/TV
 - [ ] Prioritize queue so users who haven't gone in a while get queued up sooner
 - [ ] Admin controls for managing sessions
-- [ ] `/pop` to diplay next link and queue and remove it from the queue
 - [ ] Support for other video platforms
 - [ ] Send message to user when their video is next in line
 
