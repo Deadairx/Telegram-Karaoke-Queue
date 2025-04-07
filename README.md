@@ -19,6 +19,7 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 
 - Rust and Cargo installed
 - Telegram Bot token (obtainable from @BotFather)
+- YouTube API key (obtainable from Google Cloud Console)
 
 ### Setup
 
@@ -26,6 +27,7 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 2. Create a `.env` file in the root directory with:
 ```
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+YOUTUBE_API_KEY=your_youtube_api_key_here
 RUST_LOG=info
 ```
 3. Build the project:
@@ -36,6 +38,14 @@ cargo build
 ```
 cargo run
 ```
+
+### Getting a YouTube API Key
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable the YouTube Data API v3
+4. Create credentials (API key)
+5. Copy the API key to your `.env` file
 
 ## Bot Commands
 
@@ -50,6 +60,7 @@ cargo run
 ## Future Enhancements
 
 - [x] a message containing a youtube link should automatically be added to the queue
+- [x] Display video titles and usernames in queue
 - [ ] `/current` to display the video playing now
 - [ ] `/backlog` or `/history` to see all videos previously played
 - [ ] Persistent storage for sessions and queue items
@@ -57,8 +68,8 @@ cargo run
 - [ ] Prioritize queue so users who haven't gone in a while get queued up sooner
 - [ ] Admin controls for managing sessions
 - [ ] `/pop` to diplay next link and queue and remove it from the queue
-- [ ] Display video thumbnails and titles in queue
 - [ ] Support for other video platforms
+- [ ] Send message to user when their video is next in line
 
 See [ORIGINAL_REQUIREMENTS.md](ORIGINAL_REQUIREMENTS.md) for the initial project requirements and design notes.
 

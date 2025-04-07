@@ -1,10 +1,10 @@
+use anyhow::Result;
+use chrono;
+use rand::Rng;
 use std::collections::HashMap;
 use teloxide::types::UserId;
-use rand::Rng;
-use chrono;
-use anyhow::Result;
 
-use crate::youtube::{VideoInfo, validate_youtube_url, create_video_info, is_duplicate};
+use crate::youtube::{create_video_info, is_duplicate, validate_youtube_url, VideoInfo};
 
 #[derive(Clone, Default)]
 pub struct SessionState {
@@ -23,6 +23,7 @@ pub struct Session {
 pub struct QueueItem {
     pub video_info: VideoInfo,
     pub added_by: UserId,
+    pub username: Option<String>, // Store username of the person who added this item
     pub added_at: i64,
     pub played: bool,
     pub note: Option<String>, // Optional note for the queue item
@@ -35,16 +36,16 @@ impl SessionState {
 
     pub fn create_session(&mut self, user_id: UserId) -> String {
         let session_code = generate_session_code();
-        
+
         let new_session = Session {
             code: session_code.clone(),
             users: vec![user_id],
             queue: Vec::new(),
         };
-        
+
         self.sessions.insert(session_code.clone(), new_session);
         self.user_sessions.insert(user_id, session_code.clone());
-        
+
         session_code
     }
 
@@ -61,31 +62,44 @@ impl SessionState {
         }
     }
 
-    pub fn add_to_queue(&mut self, user_id: UserId, url: String, note: Option<String>) -> Result<bool> {
-        let session_code = self.user_sessions.get(&user_id)
+    pub async fn add_to_queue(
+        &mut self,
+        user_id: UserId,
+        url: String,
+        username: Option<String>,
+        note: Option<String>,
+    ) -> Result<bool> {
+        let session_code = self
+            .user_sessions
+            .get(&user_id)
             .ok_or_else(|| anyhow::anyhow!("User not in a session"))?;
-        
-        let session = self.sessions.get_mut(session_code)
+
+        let session = self
+            .sessions
+            .get_mut(session_code)
             .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
-        
+
         // Check for duplicates
-        let is_dup = session.queue.iter()
+        let is_dup = session
+            .queue
+            .iter()
             .any(|item| is_duplicate(&item.video_info.url, &url));
-        
+
         if is_dup {
             return Ok(false); // Don't add duplicates
         }
-        
-        let video_info = create_video_info(&url)?;
-        
+
+        let video_info = create_video_info(&url).await?;
+
         let queue_item = QueueItem {
             video_info,
             added_by: user_id,
+            username,
             added_at: chrono::Utc::now().timestamp(),
             played: false,
             note,
         };
-        
+
         session.queue.push(queue_item);
         Ok(true)
     }
@@ -93,11 +107,9 @@ impl SessionState {
     pub fn get_queue(&self, user_id: &UserId) -> Option<Vec<&QueueItem>> {
         let session_code = self.user_sessions.get(user_id)?;
         let session = self.sessions.get(session_code)?;
-        
-        let items = session.queue.iter()
-            .filter(|item| !item.played)
-            .collect();
-        
+
+        let items = session.queue.iter().filter(|item| !item.played).collect();
+
         Some(items)
     }
 
@@ -106,7 +118,7 @@ impl SessionState {
             if let Some(session) = self.sessions.get_mut(&session_code) {
                 // Remove user from session
                 session.users.retain(|id| *id != *user_id);
-                
+
                 // If session is empty, remove it
                 if session.users.is_empty() {
                     self.sessions.remove(&session_code);
@@ -127,7 +139,7 @@ impl SessionState {
 pub fn generate_session_code() -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut rng = rand::thread_rng();
-    
+
     (0..6)
         .map(|_| {
             let idx = rng.gen_range(0..CHARSET.len());
@@ -139,4 +151,4 @@ pub fn generate_session_code() -> String {
 // Public function to validate YouTube URL
 pub fn is_valid_youtube_url(url: &str) -> bool {
     validate_youtube_url(url)
-} 
+}

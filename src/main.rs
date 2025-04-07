@@ -3,17 +3,13 @@ mod youtube;
 
 use anyhow::Result;
 use dotenv::dotenv;
-use log::{info, warn, error};
+use log::{error, info, warn};
 use std::env;
 use std::sync::Arc;
-use teloxide::{
-    dispatching::UpdateHandler,
-    prelude::*,
-    utils::command::BotCommands,
-};
+use teloxide::{dispatching::UpdateHandler, prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
 
-use session::{SessionState, is_valid_youtube_url};
+use session::{is_valid_youtube_url, SessionState};
 
 // Bot commands
 #[derive(BotCommands, Clone)]
@@ -47,7 +43,7 @@ async fn main() -> Result<()> {
     let bot_token = env::var("TELEGRAM_BOT_TOKEN")
         .map_err(|_| anyhow::anyhow!("TELEGRAM_BOT_TOKEN must be set"))?;
     let bot = Bot::new(bot_token);
-    
+
     let state = Arc::new(Mutex::new(SessionState::new()));
 
     let handler = Update::filter_message()
@@ -58,8 +54,8 @@ async fn main() -> Result<()> {
         )
         .branch(
             dptree::filter(|msg: Message| {
-                msg.text().is_some() && msg.text().unwrap().contains("youtube") || 
-                msg.text().is_some() && msg.text().unwrap().contains("youtu.be")
+                msg.text().is_some() && msg.text().unwrap().contains("youtube")
+                    || msg.text().is_some() && msg.text().unwrap().contains("youtu.be")
             })
             .endpoint(handle_youtube_message),
         );
@@ -80,15 +76,29 @@ async fn handle_command(
     cmd: Command,
     state: SharedState,
 ) -> ResponseResult<()> {
-    if let Some(user_id) = msg.from().map(|user| user.id) {
+    if let Some(user) = msg.from() {
+        let user_id = user.id;
+        let username = user.username.clone().or_else(|| {
+            Some(
+                format!(
+                    "{} {}",
+                    user.first_name.clone(),
+                    user.last_name.clone().unwrap_or_default()
+                )
+                .trim()
+                .to_string(),
+            )
+        });
+
         match cmd {
             Command::Help | Command::Start => {
-                bot.send_message(msg.chat.id, Command::descriptions().to_string()).await?;
+                bot.send_message(msg.chat.id, Command::descriptions().to_string())
+                    .await?;
             }
             Command::StartSession => {
                 let mut state_guard = state.lock().await;
                 let session_code = state_guard.create_session(user_id);
-                
+
                 bot.send_message(
                     msg.chat.id,
                     format!("Created new karaoke session with code: {}\nShare this code with friends to let them join!", session_code)
@@ -97,70 +107,72 @@ async fn handle_command(
             Command::Join(code) => {
                 let code = code.trim();
                 let mut state_guard = state.lock().await;
-                
+
                 if state_guard.join_session(user_id, code) {
-                    bot.send_message(
-                        msg.chat.id,
-                        format!("You've joined session: {}", code)
-                    ).await?;
+                    bot.send_message(msg.chat.id, format!("You've joined session: {}", code))
+                        .await?;
                 } else {
                     bot.send_message(
                         msg.chat.id,
-                        "Invalid session code. Please check and try again."
-                    ).await?;
+                        "Invalid session code. Please check and try again.",
+                    )
+                    .await?;
                 }
             }
             Command::Add(input) => {
+                let input_cloned = input.clone();
                 let mut state_guard = state.lock().await;
-                
+
                 if state_guard.is_in_session(&user_id) {
                     // Extract YouTube URL from input
-                    let input_parts: Vec<&str> = input.split_whitespace().collect();
-                    
+                    let input_parts: Vec<&str> = input_cloned.split_whitespace().collect();
+
                     if input_parts.is_empty() {
                         bot.send_message(
                             msg.chat.id,
-                            "Please provide a YouTube URL with /add command."
-                        ).await?;
+                            "Please provide a YouTube URL with /add command.",
+                        )
+                        .await?;
                         return Ok(());
                     }
-                    
+
                     let url = input_parts[0].to_string();
-                    
+
                     // Get the rest of the input as note (if any)
                     let note = if input_parts.len() > 1 {
                         Some(input_parts[1..].join(" "))
                     } else {
                         None
                     };
-                    
+
                     if is_valid_youtube_url(&url) {
-                        match state_guard.add_to_queue(user_id, url, note) {
+                        match state_guard.add_to_queue(user_id, url, username, note).await {
                             Ok(true) => {
                                 bot.send_message(
                                     msg.chat.id,
-                                    "Added to queue! Type /queue to see current lineup."
-                                ).await?;
-                            },
+                                    "Added to queue! Type /queue to see current lineup.",
+                                )
+                                .await?;
+                            }
                             Ok(false) => {
                                 bot.send_message(
                                     msg.chat.id,
-                                    "This video is already in the queue."
-                                ).await?;
-                            },
+                                    "This video is already in the queue.",
+                                )
+                                .await?;
+                            }
                             Err(e) => {
                                 error!("Error adding to queue: {}", e);
                                 bot.send_message(
                                     msg.chat.id,
-                                    "There was an error adding your video to the queue."
-                                ).await?;
+                                    "There was an error adding your video to the queue.",
+                                )
+                                .await?;
                             }
                         }
                     } else {
-                        bot.send_message(
-                            msg.chat.id,
-                            "Please provide a valid YouTube URL."
-                        ).await?;
+                        bot.send_message(msg.chat.id, "Please provide a valid YouTube URL.")
+                            .await?;
                     }
                 } else {
                     bot.send_message(
@@ -171,32 +183,45 @@ async fn handle_command(
             }
             Command::Queue => {
                 let state_guard = state.lock().await;
-                
+
                 if state_guard.is_in_session(&user_id) {
                     if let Some(queue_items) = state_guard.get_queue(&user_id) {
                         if queue_items.is_empty() {
                             bot.send_message(
                                 msg.chat.id,
-                                "The queue is empty. Add videos with /add [youtube_url]"
-                            ).await?;
+                                "The queue is empty. Add videos with /add [youtube_url]",
+                            )
+                            .await?;
                         } else {
                             let mut queue_text = "Current queue:\n".to_string();
-                            
+
                             for (i, item) in queue_items.iter().enumerate() {
                                 let note_text = match &item.note {
                                     Some(note) => format!(" - Note: {}", note),
                                     None => String::new(),
                                 };
-                                
+
+                                // Get video title or use ID if title is not available
+                                let video_name = match &item.video_info.title {
+                                    Some(title) => title.clone(),
+                                    None => format!("Video ID: {}", item.video_info.id),
+                                };
+
+                                // Get the username or use a default
+                                let user_identifier = match &item.username {
+                                    Some(name) => name.clone(),
+                                    None => format!("User {}", item.added_by.0),
+                                };
+
                                 queue_text.push_str(&format!(
-                                    "{}. {} (added by User {}){}  \n", 
-                                    i + 1, 
-                                    item.video_info.url, 
-                                    item.added_by.0,
+                                    "{}. {} (added by {}){}  \n",
+                                    i + 1,
+                                    video_name,
+                                    user_identifier,
                                     note_text
                                 ));
                             }
-                            
+
                             bot.send_message(msg.chat.id, queue_text).await?;
                         }
                     }
@@ -209,36 +234,42 @@ async fn handle_command(
             }
             Command::Leave => {
                 let mut state_guard = state.lock().await;
-                
+
                 if state_guard.leave_session(&user_id) {
-                    bot.send_message(
-                        msg.chat.id,
-                        "You've left the session."
-                    ).await?;
+                    bot.send_message(msg.chat.id, "You've left the session.")
+                        .await?;
                 } else {
-                    bot.send_message(
-                        msg.chat.id,
-                        "You're not in a session."
-                    ).await?;
+                    bot.send_message(msg.chat.id, "You're not in a session.")
+                        .await?;
                 }
             }
         }
     } else {
-        bot.send_message(msg.chat.id, "Sorry, I couldn't identify your user account.").await?;
+        bot.send_message(msg.chat.id, "Sorry, I couldn't identify your user account.")
+            .await?;
     }
 
     Ok(())
 }
 
 // New function to handle messages containing YouTube URLs
-async fn handle_youtube_message(
-    bot: Bot,
-    msg: Message,
-    state: SharedState,
-) -> ResponseResult<()> {
-    if let (Some(text), Some(user_id)) = (msg.text(), msg.from().map(|user| user.id)) {
+async fn handle_youtube_message(bot: Bot, msg: Message, state: SharedState) -> ResponseResult<()> {
+    if let (Some(text), Some(user)) = (msg.text(), msg.from()) {
+        let user_id = user.id;
+        let username = user.username.clone().or_else(|| {
+            Some(
+                format!(
+                    "{} {}",
+                    user.first_name.clone(),
+                    user.last_name.clone().unwrap_or_default()
+                )
+                .trim()
+                .to_string(),
+            )
+        });
+
         let mut state_guard = state.lock().await;
-        
+
         if !state_guard.is_in_session(&user_id) {
             bot.send_message(
                 msg.chat.id,
@@ -246,69 +277,68 @@ async fn handle_youtube_message(
             ).await?;
             return Ok(());
         }
-        
+
         // Extract YouTube URL and note
         let words: Vec<&str> = text.split_whitespace().collect();
-        
+
         // Find the first YouTube URL in the message
-        if let Some(url_pos) = words.iter().position(|word| 
-            word.contains("youtube.com") || word.contains("youtu.be")
-        ) {
+        if let Some(url_pos) = words
+            .iter()
+            .position(|word| word.contains("youtube.com") || word.contains("youtu.be"))
+        {
             let url = words[url_pos].to_string();
-            
+
             // Everything before the URL goes into the note
             let before_note = if url_pos > 0 {
                 Some(words[0..url_pos].join(" "))
             } else {
                 None
             };
-            
+
             // Everything after the URL goes into the note
             let after_note = if url_pos < words.len() - 1 {
-                Some(words[url_pos+1..].join(" "))
+                Some(words[url_pos + 1..].join(" "))
             } else {
                 None
             };
-            
+
             // Combine notes if needed
             let note = match (before_note, after_note) {
                 (Some(before), Some(after)) => Some(format!("{} {}", before, after)),
                 (Some(note), None) | (None, Some(note)) => Some(note),
                 (None, None) => None,
             };
-            
+
             if is_valid_youtube_url(&url) {
-                match state_guard.add_to_queue(user_id, url, note) {
+                match state_guard.add_to_queue(user_id, url, username, note).await {
                     Ok(true) => {
                         bot.send_message(
                             msg.chat.id,
-                            "Added to queue! Type /queue to see current lineup."
-                        ).await?;
-                    },
+                            "Added to queue! Type /queue to see current lineup.",
+                        )
+                        .await?;
+                    }
                     Ok(false) => {
-                        bot.send_message(
-                            msg.chat.id,
-                            "This video is already in the queue."
-                        ).await?;
-                    },
+                        bot.send_message(msg.chat.id, "This video is already in the queue.")
+                            .await?;
+                    }
                     Err(e) => {
                         error!("Error adding to queue: {}", e);
                         bot.send_message(
                             msg.chat.id,
-                            "There was an error adding your video to the queue."
-                        ).await?;
+                            "There was an error adding your video to the queue.",
+                        )
+                        .await?;
                     }
                 }
             } else {
-                bot.send_message(
-                    msg.chat.id,
-                    "Please provide a valid YouTube URL."
-                ).await?;
+                bot.send_message(msg.chat.id, "Please provide a valid YouTube URL.")
+                    .await?;
             }
         } else {
             // No URL found, do nothing
         }
     }
-    
+
     Ok(())
 }
