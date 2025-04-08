@@ -4,8 +4,8 @@ use rand::Rng;
 use std::collections::HashMap;
 use teloxide::types::UserId;
 
-use crate::youtube::{create_video_info, validate_youtube_url, VideoInfo};
 use crate::cast::CastStatus;
+use crate::youtube::{create_video_info, validate_youtube_url, VideoInfo};
 
 #[derive(Clone, Default)]
 pub struct SessionState {
@@ -139,50 +139,71 @@ impl SessionState {
         }
         false
     }
-    
+
     // Get the next item in the queue and mark it as current
     pub fn next_in_queue(&mut self, user_id: &UserId) -> Option<QueueItem> {
         // Only allow session owner to advance the queue
         if !self.is_session_owner(user_id) {
             return None;
         }
-        
+
         let session_code = self.user_sessions.get(user_id)?;
         let session = self.sessions.get_mut(session_code)?;
-        
+
         // Find the first unplayed item
         let next_item_index = session.queue.iter().position(|item| !item.played);
-        
+
         if let Some(index) = next_item_index {
             // Mark item as played
             session.queue[index].played = true;
-            
+
             // Set current video in cast status
             session.cast_status.current_video = Some(session.queue[index].video_info.clone());
-            
+
             // Return a clone of the item
             return Some(session.queue[index].clone());
         }
-        
+
         None
     }
-    
+
     // Get the current playing video
     pub fn get_current_video(&self, user_id: &UserId) -> Option<&VideoInfo> {
         let session_code = self.user_sessions.get(user_id)?;
         let session = self.sessions.get(session_code)?;
-        
+
         session.cast_status.current_video.as_ref()
     }
-    
+
     // Get history of played videos
     pub fn get_history(&self, user_id: &UserId) -> Option<Vec<&QueueItem>> {
         let session_code = self.user_sessions.get(user_id)?;
         let session = self.sessions.get(session_code)?;
-        
+
         let items = session.queue.iter().filter(|item| item.played).collect();
-        
+
         Some(items)
+    }
+
+    // Set the device for a session
+    pub fn set_device(&mut self, user_id: &UserId, device_name: &str) -> bool {
+        if let Some(session_code) = self.user_sessions.get(user_id) {
+            if let Some(session) = self.sessions.get_mut(session_code) {
+                session.cast_status.cast_device = Some(device_name.to_string());
+                return true;
+            }
+        }
+        false
+    }
+
+    // Get the current device for a session
+    pub fn get_device(&self, user_id: &UserId) -> Option<String> {
+        if let Some(session_code) = self.user_sessions.get(user_id) {
+            if let Some(session) = self.sessions.get(session_code) {
+                return session.cast_status.cast_device.clone();
+            }
+        }
+        None
     }
 }
 

@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Documentation
+If you need to get documentation for details on how to use something, ask me
+what info you need and steps on how I may find it. I will reply with
+documentation fragments related to what you need. Wait for me to provide the
+documentation fragments.
+
+# Adding dependencies
+When a dependency needs to be added to a project, use the cli command instead
+of editing the dependency file directly so that we get the latest version.
+(ex. running `cargo add <crate>` instead of editing `Cargo.toml`)

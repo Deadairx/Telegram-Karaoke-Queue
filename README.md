@@ -1,6 +1,6 @@
 # Karaoke Queue Bot
 
-This Telegram bot allows users to join a karaoke session and add YouTube videos to a shared queue for playback.
+This Telegram bot allows users to join a karaoke session and add YouTube videos to a shared queue for playback on a Chromecast device. This implementation is specifically designed for macOS.
 
 ## Features
 
@@ -8,7 +8,7 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 - Add YouTube videos to a shared queue
 - View the current queue
 - Automatic validation of YouTube links
-- Cast videos to a Chromecast/TV (simulated)
+- Cast videos to Chromecast devices on your network (macOS only)
 - Track currently playing video and history
 - Session persistence across bot restarts (coming soon)
 - Queue prioritization for users who haven't gone in a while (coming soon)
@@ -17,9 +17,11 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 
 ### Prerequisites
 
+- macOS (required for Chromecast discovery)
 - Rust and Cargo installed
 - Telegram Bot token (obtainable from @BotFather)
 - YouTube API key (obtainable from Google Cloud Console)
+- A Chromecast device on your local network
 
 ### Setup
 
@@ -59,31 +61,36 @@ cargo run
 - `/next`: Play the next video in the queue (session owner only)
 - `/current`: Display the video playing now
 - `/history`: View all videos previously played
+- `/devices`: List all available Chromecast devices on your network
+- `/set-device [device name]`: Set which Chromecast device to use (session owner only)
 
 ## Casting Functionality
 
-The bot includes a simulated casting functionality. When the session owner uses the `/next` command, the bot:
+The bot includes Chromecast integration using the `rust_cast` crate and macOS's `dns-sd` command for device discovery. When the session owner uses the `/next` command, the bot:
 
 1. Pops the next video from the queue
 2. Updates the current playing video
-3. Simulates casting to a device (currently a placeholder for real implementation)
-4. Tracks the video in history
+3. Discovers Chromecast devices on your network using `dns-sd`
+4. Connects to a specified or default Chromecast device
+5. Casts the YouTube video to the device
+6. Tracks the video in history
 
-In a real implementation, this would connect to a Chromecast or other casting device to actually play the video.
+If no Chromecast device is specified, the bot will use the first available device it finds on your network.
 
 ## Future Enhancements
 
 - [x] a message containing a youtube link should automatically be added to the queue
 - [x] Display video titles and usernames in queue
-- [x] Casting functionality to a Chromecast/TV (simulated)
+- [x] Casting functionality to a Chromecast/TV
 - [x] `/current` to display the video playing now
 - [x] `/history` to see all videos previously played
-- [ ] Implement actual connection to Chromecast devices
+- [x] Implement actual connection to Chromecast devices
 - [ ] Persistent storage for sessions and queue items
 - [ ] Prioritize queue so users who haven't gone in a while get queued up sooner
 - [ ] Admin controls for managing sessions
 - [ ] Support for other video platforms
 - [ ] Send message to user when their video is next in line
+- [ ] Support for other operating systems
 
 See [ORIGINAL_REQUIREMENTS.md](ORIGINAL_REQUIREMENTS.md) for the initial project requirements and design notes.
 
