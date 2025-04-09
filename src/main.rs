@@ -1,6 +1,6 @@
+mod cast;
 mod session;
 mod youtube;
-mod cast;
 
 use anyhow::Result;
 use dotenv::dotenv;
@@ -10,8 +10,8 @@ use std::sync::Arc;
 use teloxide::{dispatching::UpdateHandler, prelude::*, utils::command::BotCommands};
 use tokio::sync::Mutex;
 
-use session::{is_valid_youtube_url, SessionState};
 use cast::cast_video;
+use session::{is_valid_youtube_url, SessionState};
 
 // Bot commands
 #[derive(BotCommands, Clone)]
@@ -255,67 +255,75 @@ async fn handle_command(
             }
             Command::Next => {
                 let mut state_guard = state.lock().await;
-                
+
                 if !state_guard.is_in_session(&user_id) {
                     bot.send_message(
-                        msg.chat.id, 
+                        msg.chat.id,
                         "You're not in a session. Join one with /join [code] or start your own with /start-session"
                     ).await?;
                     return Ok(());
                 }
-                
+
                 if !state_guard.is_session_owner(&user_id) {
-                    bot.send_message(
-                        msg.chat.id,
-                        "Only the session owner can advance the queue."
-                    ).await?;
+                    bot.send_message(msg.chat.id, "Only the session owner can advance the queue.")
+                        .await?;
                     return Ok(());
                 }
-                
+
                 match state_guard.next_in_queue(&user_id) {
                     Some(next_item) => {
                         // Get video title
-                        let video_title = next_item.video_info.title.clone()
-                            .unwrap_or_else(|| format!("Video ID: {}", next_item.video_info.id));
-                        
+                        let video_title =
+                            next_item.video_info.title.clone().unwrap_or_else(|| {
+                                format!("Video ID: {}", next_item.video_info.id)
+                            });
+
                         // Get username
-                        let user_name = next_item.username.clone()
+                        let user_name = next_item
+                            .username
+                            .clone()
                             .unwrap_or_else(|| format!("User {}", next_item.added_by.0));
-                        
+
                         // Try to cast the video
                         let video_info = next_item.video_info.clone();
-                        
+
                         // Drop the mutex guard before the next await point to avoid deadlocks
                         drop(state_guard);
-                        
+
                         // Try to cast the video
                         match cast_video(&video_info, None).await {
                             Ok(_) => {
                                 bot.send_message(
                                     msg.chat.id,
-                                    format!("Now playing: {} (added by {})", video_title, user_name)
-                                ).await?;
+                                    format!(
+                                        "Now playing: {} (added by {})",
+                                        video_title, user_name
+                                    ),
+                                )
+                                .await?;
                             }
                             Err(e) => {
                                 error!("Error casting video: {}", e);
                                 bot.send_message(
                                     msg.chat.id,
-                                    format!("Error casting video: {}", e)
-                                ).await?;
+                                    format!("Error casting video: {}", e),
+                                )
+                                .await?;
                             }
                         }
                     }
                     None => {
                         bot.send_message(
                             msg.chat.id,
-                            "No more videos in the queue. Add videos with /add [youtube_url]"
-                        ).await?;
+                            "No more videos in the queue. Add videos with /add [youtube_url]",
+                        )
+                        .await?;
                     }
                 }
             }
             Command::Current => {
                 let state_guard = state.lock().await;
-                
+
                 if !state_guard.is_in_session(&user_id) {
                     bot.send_message(
                         msg.chat.id,
@@ -323,16 +331,19 @@ async fn handle_command(
                     ).await?;
                     return Ok(());
                 }
-                
+
                 match state_guard.get_current_video(&user_id) {
                     Some(video) => {
-                        let video_title = video.title.clone()
+                        let video_title = video
+                            .title
+                            .clone()
                             .unwrap_or_else(|| format!("Video ID: {}", video.id));
-                        
+
                         bot.send_message(
                             msg.chat.id,
-                            format!("Currently playing: {}\nLink: {}", video_title, video.url)
-                        ).await?;
+                            format!("Currently playing: {}\nLink: {}", video_title, video.url),
+                        )
+                        .await?;
                     }
                     None => {
                         bot.send_message(
@@ -344,7 +355,7 @@ async fn handle_command(
             }
             Command::History => {
                 let state_guard = state.lock().await;
-                
+
                 if !state_guard.is_in_session(&user_id) {
                     bot.send_message(
                         msg.chat.id,
@@ -352,18 +363,23 @@ async fn handle_command(
                     ).await?;
                     return Ok(());
                 }
-                
+
                 match state_guard.get_history(&user_id) {
                     Some(history_items) if !history_items.is_empty() => {
                         let mut history_text = "Previously played videos:\n".to_string();
-                        
+
                         for (i, item) in history_items.iter().enumerate() {
-                            let video_title = item.video_info.title.clone()
+                            let video_title = item
+                                .video_info
+                                .title
+                                .clone()
                                 .unwrap_or_else(|| format!("Video ID: {}", item.video_info.id));
-                            
-                            let user_name = item.username.clone()
+
+                            let user_name = item
+                                .username
+                                .clone()
                                 .unwrap_or_else(|| format!("User {}", item.added_by.0));
-                            
+
                             history_text.push_str(&format!(
                                 "{}. {} (added by {})\n",
                                 i + 1,
@@ -371,14 +387,15 @@ async fn handle_command(
                                 user_name
                             ));
                         }
-                        
+
                         bot.send_message(msg.chat.id, history_text).await?;
                     }
                     _ => {
                         bot.send_message(
                             msg.chat.id,
-                            "No videos have been played yet in this session."
-                        ).await?;
+                            "No videos have been played yet in this session.",
+                        )
+                        .await?;
                     }
                 }
             }
@@ -461,7 +478,7 @@ async fn handle_youtube_message(bot: Bot, msg: Message, state: SharedState) -> R
                         // This case won't happen anymore since we removed duplicate check
                         // but leaving the pattern match for future flexibility
                         bot.send_message(
-                            msg.chat.id, 
+                            msg.chat.id,
                             "Added to queue! Type /queue to see current lineup.",
                         )
                         .await?;

@@ -1,14 +1,14 @@
 use anyhow::Result;
 use chrono;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use teloxide::types::UserId;
-use serde::{Serialize, Deserialize};
 
-use crate::youtube::{create_video_info, validate_youtube_url, VideoInfo};
 use crate::cast::CastStatus;
+use crate::youtube::{create_video_info, validate_youtube_url, VideoInfo};
 
 const SESSION_FILE: &str = "sessions.json";
 
@@ -71,9 +71,11 @@ impl SessionState {
 
         self.sessions.insert(session_code.clone(), new_session);
         self.user_sessions.insert(user_id, session_code.clone());
-        
+
         // Save state after creating session
-        let _ = self.save();
+        if let Err(e) = self.save() {
+            eprintln!("Failed to save session state: {}", e);
+        }
 
         session_code
     }
@@ -85,10 +87,12 @@ impl SessionState {
                 session.users.push(user_id);
             }
             self.user_sessions.insert(user_id, code.to_string());
-            
+
             // Save state after joining session
-            let _ = self.save();
-            
+            if let Err(e) = self.save() {
+                eprintln!("Failed to save session state: {}", e);
+            }
+
             true
         } else {
             false
@@ -124,10 +128,12 @@ impl SessionState {
         };
 
         session.queue.push(queue_item);
-        
+
         // Save state after adding to queue
-        let _ = self.save();
-        
+        if let Err(e) = self.save() {
+            eprintln!("Failed to save session state: {}", e);
+        }
+
         Ok(true)
     }
 
@@ -151,10 +157,12 @@ impl SessionState {
                     self.sessions.remove(&session_code);
                 }
             }
-            
+
             // Save state after leaving session
-            let _ = self.save();
-            
+            if let Err(e) = self.save() {
+                eprintln!("Failed to save session state: {}", e);
+            }
+
             true
         } else {
             false
@@ -174,55 +182,57 @@ impl SessionState {
         }
         false
     }
-    
+
     // Get the next item in the queue and mark it as current
     pub fn next_in_queue(&mut self, user_id: &UserId) -> Option<QueueItem> {
         // Only allow session owner to advance the queue
         if !self.is_session_owner(user_id) {
             return None;
         }
-        
+
         let session_code = self.user_sessions.get(user_id)?;
-        
+
         // First, find the next unplayed item and clone it
         let next_item = {
             let session = self.sessions.get(session_code)?;
             let next_item_index = session.queue.iter().position(|item| !item.played)?;
             session.queue[next_item_index].clone()
         };
-        
+
         // Then, update the session state
         if let Some(session) = self.sessions.get_mut(session_code) {
             if let Some(index) = session.queue.iter().position(|item| !item.played) {
                 // Mark item as played
                 session.queue[index].played = true;
-                
+
                 // Set current video in cast status
                 session.cast_status.current_video = Some(session.queue[index].video_info.clone());
-                
+
                 // Save state after advancing queue
-                let _ = self.save();
+                if let Err(e) = self.save() {
+                    eprintln!("Failed to save session state: {}", e);
+                }
             }
         }
-        
+
         Some(next_item)
     }
-    
+
     // Get the current playing video
     pub fn get_current_video(&self, user_id: &UserId) -> Option<&VideoInfo> {
         let session_code = self.user_sessions.get(user_id)?;
         let session = self.sessions.get(session_code)?;
-        
+
         session.cast_status.current_video.as_ref()
     }
-    
+
     // Get history of played videos
     pub fn get_history(&self, user_id: &UserId) -> Option<Vec<&QueueItem>> {
         let session_code = self.user_sessions.get(user_id)?;
         let session = self.sessions.get(session_code)?;
-        
+
         let items = session.queue.iter().filter(|item| item.played).collect();
-        
+
         Some(items)
     }
 }

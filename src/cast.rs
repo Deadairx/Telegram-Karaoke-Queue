@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use log::{error, info};
+use serde::{Deserialize, Serialize};
 use std::env;
-use serde::{Serialize, Deserialize};
 
 use crate::youtube::VideoInfo;
 
@@ -28,19 +28,19 @@ impl Default for CastStatus {
 pub async fn cast_video(video_info: &VideoInfo, device_name: Option<&str>) -> Result<bool> {
     // Get the embed URL for the video
     let embed_url = crate::youtube::get_embed_url(&video_info.id);
-    
+
     // Log casting attempt
     let device = device_name.unwrap_or("default device");
     info!("Casting video {} to {}", video_info.id, device);
-    
+
     // In a real implementation, this would interact with the Chromecast API
     // For now, we'll just simulate success
-    
+
     // Simulating potential failures (could be expanded later)
     if video_info.id.is_empty() {
         return Err(anyhow!("Invalid video ID"));
     }
-    
+
     // Return success
     Ok(true)
 }
@@ -50,14 +50,17 @@ pub async fn cast_video(video_info: &VideoInfo, device_name: Option<&str>) -> Re
 pub async fn get_available_devices() -> Result<Vec<String>> {
     // In a real implementation, this would discover Chromecast devices on the network
     // For now, we'll return a dummy list
-    Ok(vec!["Living Room TV".to_string(), "Bedroom Chromecast".to_string()])
+    Ok(vec![
+        "Living Room TV".to_string(),
+        "Bedroom Chromecast".to_string(),
+    ])
 }
 
 // Stop any currently playing video
 pub async fn stop_casting(device_name: Option<&str>) -> Result<bool> {
     let device = device_name.unwrap_or("default device");
     info!("Stopping casting on {}", device);
-    
+
     // In a real implementation, this would stop the current cast
     Ok(true)
-} 
+}
