@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Result};
-use log::info;
+use log::{info, warn, error, debug};
 use regex::Regex;
 use rust_cast::channels::media;
 use rust_cast::CastDevice;
 use std::collections::HashMap;
 use std::{process::Command, sync::Arc};
 use tokio::sync::Mutex;
+use tokio::time::timeout;
+use std::time::Duration;
 
 use crate::youtube::VideoInfo;
 
@@ -43,52 +45,72 @@ struct ChromecastDevice {
 
 // Discover Chromecast devices using dns-sd
 async fn discover_chromecasts() -> Result<Vec<ChromecastDevice>> {
-    // Run dns-sd command
-    let output = Command::new("dns-sd")
-        .args(["-B", "_googlecast._tcp"])
-        .output()
-        .map_err(|e| anyhow!("Failed to run dns-sd: {}", e))?;
+    info!("Starting Chromecast device discovery...");
+    
+    // Run dns-sd command with a 10 second timeout
+    // Using -G for one-time lookup instead of -B for continuous browsing
+    let output = match timeout(
+        Duration::from_secs(10),
+        tokio::process::Command::new("dns-sd")
+            .args(["-G", "v4", "_googlecast._tcp", "local"])
+            .output()
+    ).await {
+        Ok(Ok(output)) => {
+            debug!("dns-sd command output: {}", String::from_utf8_lossy(&output.stdout));
+            if !output.stderr.is_empty() {
+                warn!("dns-sd stderr: {}", String::from_utf8_lossy(&output.stderr));
+            }
+            output
+        },
+        Ok(Err(e)) => {
+            error!("Failed to run dns-sd command: {}", e);
+            return Err(anyhow!("Failed to run dns-sd: {}", e));
+        },
+        Err(_) => {
+            error!("dns-sd command timed out after 10 seconds");
+            return Err(anyhow!("dns-sd command timed out after 10 seconds"));
+        },
+    };
 
     if !output.status.success() {
-        return Err(anyhow!("dns-sd command failed"));
+        error!("dns-sd command failed with status: {}", output.status);
+        return Err(anyhow!("dns-sd command failed with status: {}", output.status));
     }
 
     let output_str = String::from_utf8_lossy(&output.stdout);
+    debug!("Raw dns-sd output: {}", output_str);
+    
     let mut devices = Vec::new();
 
     // Parse each line that contains a device
     for line in output_str.lines() {
-        if let Some(captures) = DEVICE_REGEX.captures(line) {
-            if let Some(name) = captures.get(1) {
-                // Get device details using dns-sd -L
-                let lookup_output = Command::new("dns-sd")
-                    .args(["-L", name.as_str(), "_googlecast._tcp", "local"])
-                    .output()
-                    .map_err(|e| anyhow!("Failed to run dns-sd lookup: {}", e))?;
-
-                if lookup_output.status.success() {
-                    let lookup_str = String::from_utf8_lossy(&lookup_output.stdout);
-                    // Parse host and port from lookup output
-                    // This is a simplified version - you might want to add more robust parsing
-                    if let Some(host_line) =
-                        lookup_str.lines().find(|l| l.contains("canonical name"))
-                    {
-                        let host = host_line
-                            .split_whitespace()
-                            .last()
-                            .ok_or_else(|| anyhow!("Failed to parse host"))?
-                            .trim_end_matches('.');
-
-                        // Default port for Chromecast is 8009
-                        devices.push(ChromecastDevice {
-                            name: name.as_str().to_string(),
-                            host: host.to_string(),
-                            port: 8009,
-                        });
-                    }
-                }
+        debug!("Processing line: {}", line);
+        
+        // Updated regex to match the -G output format
+        if line.contains("_googlecast._tcp.local.") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 5 {
+                let name = parts[0];
+                let host = parts[4].trim_end_matches('.');
+                
+                info!("Found Chromecast device: {} at {}", name, host);
+                
+                // Default port for Chromecast is 8009
+                devices.push(ChromecastDevice {
+                    name: name.to_string(),
+                    host: host.to_string(),
+                    port: 8009,
+                });
+            } else {
+                warn!("Unexpected line format: {}", line);
             }
         }
+    }
+
+    if devices.is_empty() {
+        warn!("No Chromecast devices found on the network");
+    } else {
+        info!("Found {} Chromecast devices", devices.len());
     }
 
     Ok(devices)
