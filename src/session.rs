@@ -237,17 +237,10 @@ impl SessionState {
     }
 }
 
-// Generate a random 6-character session code
+// Generate a random 4-digit session code
 pub fn generate_session_code() -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut rng = rand::thread_rng();
-
-    (0..6)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
+    format!("{:04}", rng.gen_range(0..10000))
 }
 
 // Public function to validate YouTube URL
