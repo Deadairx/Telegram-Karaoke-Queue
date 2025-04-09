@@ -11,7 +11,7 @@ lazy_static! {
     ).expect("Invalid YouTube URL regex pattern");
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VideoInfo {
     pub id: String,
     pub title: Option<String>,
