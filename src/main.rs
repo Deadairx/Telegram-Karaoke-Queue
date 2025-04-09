@@ -37,6 +37,10 @@ enum Command {
     Current,
     #[command(description = "View history of played videos")]
     History,
+    #[command(description = "Get your current session ID")]
+    Id,
+    #[command(description = "Get detailed session information")]
+    Session,
 }
 
 // State shared between command handlers
@@ -105,7 +109,7 @@ async fn handle_command(
             }
             Command::StartSession => {
                 let mut state_guard = state.lock().await;
-                let session_code = state_guard.create_session(user_id);
+                let session_code = state_guard.create_session(user_id, username.clone());
 
                 bot.send_message(
                     msg.chat.id,
@@ -116,7 +120,7 @@ async fn handle_command(
                 let code = code.trim();
                 let mut state_guard = state.lock().await;
 
-                if state_guard.join_session(user_id, code) {
+                if state_guard.join_session(user_id, username.clone(), code) {
                     bot.send_message(msg.chat.id, format!("You've joined session: {}", code))
                         .await?;
                 } else {
@@ -397,6 +401,29 @@ async fn handle_command(
                         )
                         .await?;
                     }
+                }
+            }
+            Command::Id => {
+                let state_guard = state.lock().await;
+                if let Some(session_code) = state_guard.user_sessions.get(&user_id) {
+                    bot.send_message(msg.chat.id, format!("{}", session_code))
+                        .await?;
+                } else {
+                    bot.send_message(
+                        msg.chat.id,
+                        "You're not in a session. Join one with /join [code] or start your own with /start-session"
+                    ).await?;
+                }
+            }
+            Command::Session => {
+                let state_guard = state.lock().await;
+                if let Some(session_info) = state_guard.get_session_info(&user_id) {
+                    bot.send_message(msg.chat.id, session_info).await?;
+                } else {
+                    bot.send_message(
+                        msg.chat.id,
+                        "You're not in a session. Join one with /join [code] or start your own with /start-session"
+                    ).await?;
                 }
             }
         }
