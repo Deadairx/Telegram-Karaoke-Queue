@@ -21,10 +21,11 @@ pub struct SessionState {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Session {
     pub code: String,
-    pub users: Vec<UserId>,
+    pub users: Vec<(UserId, Option<String>)>, // (user_id, username)
     pub queue: Vec<QueueItem>,
     pub owner: UserId,           // Track who created the session
     pub cast_status: CastStatus, // Track current casting status
+    pub created_at: i64,         // Unix timestamp when session was created
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -58,15 +59,16 @@ impl SessionState {
         }
     }
 
-    pub fn create_session(&mut self, user_id: UserId) -> String {
+    pub fn create_session(&mut self, user_id: UserId, username: Option<String>) -> String {
         let session_code = generate_session_code();
 
         let new_session = Session {
             code: session_code.clone(),
-            users: vec![user_id],
+            users: vec![(user_id, username)],
             queue: Vec::new(),
             owner: user_id,
             cast_status: CastStatus::default(),
+            created_at: chrono::Utc::now().timestamp(),
         };
 
         self.sessions.insert(session_code.clone(), new_session);
@@ -80,11 +82,11 @@ impl SessionState {
         session_code
     }
 
-    pub fn join_session(&mut self, user_id: UserId, code: &str) -> bool {
+    pub fn join_session(&mut self, user_id: UserId, username: Option<String>, code: &str) -> bool {
         if let Some(session) = self.sessions.get_mut(code) {
             // Add user to session if not already in it
-            if !session.users.contains(&user_id) {
-                session.users.push(user_id);
+            if !session.users.iter().any(|(id, _)| *id == user_id) {
+                session.users.push((user_id, username));
             }
             self.user_sessions.insert(user_id, code.to_string());
 
@@ -150,7 +152,7 @@ impl SessionState {
         if let Some(session_code) = self.user_sessions.remove(user_id) {
             if let Some(session) = self.sessions.get_mut(&session_code) {
                 // Remove user from session
-                session.users.retain(|id| *id != *user_id);
+                session.users.retain(|(id, _)| *id != *user_id);
 
                 // If session is empty, remove it
                 if session.users.is_empty() {
@@ -235,19 +237,40 @@ impl SessionState {
 
         Some(items)
     }
+
+    pub fn get_session_info(&self, user_id: &UserId) -> Option<String> {
+        let session_code = self.user_sessions.get(user_id)?;
+        let session = self.sessions.get(session_code)?;
+
+        let duration = chrono::Utc::now().timestamp() - session.created_at;
+        let hours = duration / 3600;
+        let minutes = (duration % 3600) / 60;
+
+        let mut info = format!(
+            "Session ID: {}\nDuration: {}h {}m\nUsers in session: {}",
+            session.code,
+            hours,
+            minutes,
+            session.users.len()
+        );
+
+        // If user is the owner, add list of users
+        if session.owner == *user_id {
+            info.push_str("\n\nUsers in session:");
+            for (_, username) in &session.users {
+                let user_display = username.clone().unwrap_or_else(|| "Anonymous".to_string());
+                info.push_str(&format!("\n- {}", user_display));
+            }
+        }
+
+        Some(info)
+    }
 }
 
-// Generate a random 6-character session code
+// Generate a random 4-digit session code
 pub fn generate_session_code() -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let mut rng = rand::thread_rng();
-
-    (0..6)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
+    format!("{:04}", rng.gen_range(0..10000))
 }
 
 // Public function to validate YouTube URL
