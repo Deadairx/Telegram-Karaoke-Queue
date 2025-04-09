@@ -2,18 +2,23 @@ use anyhow::Result;
 use chrono;
 use rand::Rng;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use teloxide::types::UserId;
+use serde::{Serialize, Deserialize};
 
 use crate::youtube::{create_video_info, validate_youtube_url, VideoInfo};
 use crate::cast::CastStatus;
 
-#[derive(Clone, Default)]
+const SESSION_FILE: &str = "sessions.json";
+
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct SessionState {
     pub sessions: HashMap<String, Session>,
     pub user_sessions: HashMap<UserId, String>, // Maps Telegram UserId to session code
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Session {
     pub code: String,
     pub users: Vec<UserId>,
@@ -22,7 +27,7 @@ pub struct Session {
     pub cast_status: CastStatus, // Track current casting status
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct QueueItem {
     pub video_info: VideoInfo,
     pub added_by: UserId,
@@ -34,7 +39,23 @@ pub struct QueueItem {
 
 impl SessionState {
     pub fn new() -> Self {
-        Self::default()
+        Self::load().unwrap_or_else(|_| Self::default())
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let json = serde_json::to_string_pretty(self)?;
+        fs::write(SESSION_FILE, json)?;
+        Ok(())
+    }
+
+    pub fn load() -> Result<Self> {
+        if Path::new(SESSION_FILE).exists() {
+            let json = fs::read_to_string(SESSION_FILE)?;
+            let state: SessionState = serde_json::from_str(&json)?;
+            Ok(state)
+        } else {
+            Ok(SessionState::default())
+        }
     }
 
     pub fn create_session(&mut self, user_id: UserId) -> String {
@@ -50,6 +71,9 @@ impl SessionState {
 
         self.sessions.insert(session_code.clone(), new_session);
         self.user_sessions.insert(user_id, session_code.clone());
+        
+        // Save state after creating session
+        let _ = self.save();
 
         session_code
     }
@@ -61,6 +85,10 @@ impl SessionState {
                 session.users.push(user_id);
             }
             self.user_sessions.insert(user_id, code.to_string());
+            
+            // Save state after joining session
+            let _ = self.save();
+            
             true
         } else {
             false
@@ -84,7 +112,6 @@ impl SessionState {
             .get_mut(session_code)
             .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
 
-        // Remove duplicate check
         let video_info = create_video_info(&url).await?;
 
         let queue_item = QueueItem {
@@ -97,6 +124,10 @@ impl SessionState {
         };
 
         session.queue.push(queue_item);
+        
+        // Save state after adding to queue
+        let _ = self.save();
+        
         Ok(true)
     }
 
@@ -120,6 +151,10 @@ impl SessionState {
                     self.sessions.remove(&session_code);
                 }
             }
+            
+            // Save state after leaving session
+            let _ = self.save();
+            
             true
         } else {
             false
@@ -148,23 +183,29 @@ impl SessionState {
         }
         
         let session_code = self.user_sessions.get(user_id)?;
-        let session = self.sessions.get_mut(session_code)?;
         
-        // Find the first unplayed item
-        let next_item_index = session.queue.iter().position(|item| !item.played);
+        // First, find the next unplayed item and clone it
+        let next_item = {
+            let session = self.sessions.get(session_code)?;
+            let next_item_index = session.queue.iter().position(|item| !item.played)?;
+            session.queue[next_item_index].clone()
+        };
         
-        if let Some(index) = next_item_index {
-            // Mark item as played
-            session.queue[index].played = true;
-            
-            // Set current video in cast status
-            session.cast_status.current_video = Some(session.queue[index].video_info.clone());
-            
-            // Return a clone of the item
-            return Some(session.queue[index].clone());
+        // Then, update the session state
+        if let Some(session) = self.sessions.get_mut(session_code) {
+            if let Some(index) = session.queue.iter().position(|item| !item.played) {
+                // Mark item as played
+                session.queue[index].played = true;
+                
+                // Set current video in cast status
+                session.cast_status.current_video = Some(session.queue[index].video_info.clone());
+                
+                // Save state after advancing queue
+                let _ = self.save();
+            }
         }
         
-        None
+        Some(next_item)
     }
     
     // Get the current playing video

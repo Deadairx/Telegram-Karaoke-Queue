@@ -10,7 +10,7 @@ This Telegram bot allows users to join a karaoke session and add YouTube videos 
 - Automatic validation of YouTube links
 - Cast videos to a Chromecast/TV (simulated)
 - Track currently playing video and history
-- Session persistence across bot restarts (coming soon)
+- Session persistence across bot restarts
 - Queue prioritization for users who haven't gone in a while (coming soon)
 
 ## Getting Started
@@ -71,6 +71,16 @@ The bot includes a simulated casting functionality. When the session owner uses 
 
 In a real implementation, this would connect to a Chromecast or other casting device to actually play the video.
 
+## Session Persistence
+
+The bot now supports session persistence across restarts:
+
+- All session data is automatically saved to a `sessions.json` file
+- When the bot restarts, it automatically loads existing sessions
+- Users don't need to rejoin their sessions after a bot restart
+- The queue state, including played/unplayed status, is preserved
+- Session ownership and user associations are maintained
+
 ## Future Enhancements
 
 - [x] a message containing a youtube link should automatically be added to the queue
@@ -78,8 +88,8 @@ In a real implementation, this would connect to a Chromecast or other casting de
 - [x] Casting functionality to a Chromecast/TV (simulated)
 - [x] `/current` to display the video playing now
 - [x] `/history` to see all videos previously played
+- [x] Persistent storage for sessions and queue items
 - [ ] Implement actual connection to Chromecast devices
-- [ ] Persistent storage for sessions and queue items
 - [ ] Prioritize queue so users who haven't gone in a while get queued up sooner
 - [ ] Admin controls for managing sessions
 - [ ] Support for other video platforms

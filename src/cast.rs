@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Result};
 use log::{error, info};
 use std::env;
+use serde::{Serialize, Deserialize};
 
 use crate::youtube::VideoInfo;
 
 // Cast status for a session
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CastStatus {
     pub current_video: Option<VideoInfo>,
     pub cast_device: Option<String>,
